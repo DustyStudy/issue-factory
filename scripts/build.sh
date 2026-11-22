@@ -11,7 +11,6 @@ work="$(mktemp -d)"
 git switch -c "$branch"
 
 ready=false
-reason="gate-failed"
 gate_log=""
 for attempt in 1 2; do
   {
@@ -36,7 +35,7 @@ for attempt in 1 2; do
     --max-budget-usd "${BUILDER_BUDGET:-2}" \
     --permission-mode dontAsk \
     --settings "$FACTORY_DIR/builder-settings.json" \
-    --allowedTools "Read,Edit,Write,Glob,Grep,Bash(bash ${GATE_PATH}),Bash(python3 -m pytest:*),Bash(ruff:*)" \
+    --allowedTools "Read,Edit,Write,Glob,Grep,Bash(bash ${GATE_PATH}:*),Bash(python3 -m pytest:*),Bash(ruff:*)" \
     --output-format json < "$work/in.txt" > "$work/builder-$attempt.json" || true
 
   # Surface what the builder did, so a failed run can be diagnosed from the job log.
