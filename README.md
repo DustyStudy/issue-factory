@@ -80,7 +80,7 @@ Add the `factory` label to an issue to start a run. The label is removed at inta
 
 ## Access to this repo
 
-The target calls this repo's reusable workflow. This repo is private. Check Settings > Actions > General > Access, and allow callers from the target's owner. A caller in the same account has run this workflow end to end.
+This repo is public, so any target can call its reusable workflow without an access setting. The scripts and prompts are public too. Keep secrets out of them; the API key lives only in each target's secrets.
 
 ## Versions
 
@@ -95,7 +95,7 @@ To upgrade a target: review the diff between the old and new tags here, then get
 
 ## Cost controls
 
-- Models follow Anthropic's "choosing a model" guidance: start on the cheapest model that can do the job, and escalate only when needed. Intake and review run on Haiku 5.5 (effort low and medium). The builder starts on Sonnet 5.5 (effort medium). Only the retry escalates to Opus 5.5, after a gate failure. Override it with `BUILDER_RETRY_MODEL`.
+- Models follow Anthropic's "choosing a model" guidance: start on the cheapest model that can do the job, and escalate only when needed. Intake and review run on Haiku 5.5 (effort low and medium). The builder starts on Sonnet 5.5 (effort medium). Only the retry escalates to Opus 5.5, after a gate failure. The retry model is set in `scripts/build.sh`.
 - Each run has a dollar cap: `intake_budget`, `builder_budget` (per attempt), `review_budget`, set as inputs by the caller.
 - The builder gets two attempts and a turn limit. A second failure goes to a human.
 - Issue text is cut to 8,000 characters. The diff is cut to 60,000.
@@ -111,7 +111,8 @@ To upgrade a target: review the diff between the old and new tags here, then get
 - The builder's output is checked again for protected paths before commit.
 - The gate is snapshot from the base commit before the builder runs, and that copy decides pass or fail. A branch cannot weaken the gate that judges it.
 - Only the repo owner's label events start a run.
-- **Known gap:** the build step has `ANTHROPIC_API_KEY` in its environment, and the gate and the builder's `pytest` runs execute code the builder wrote. A test that reads the environment could send the key out. The builder cannot print the environment directly, but test code can. Until this is fixed, treat the key as readable by test code, and keep its spend limit low. The planned fix is to run the gate and tests without the key, and to remove the builder's direct `pytest` permission.
+- The gate runs with `ANTHROPIC_API_KEY` removed from its environment. The gate runs tests the builder wrote, so this keeps the key away from them.
+- The builder has no test runner. Its only shell tool is `ruff`, which runs no project code. The factory runs the gate after the builder finishes and sends the log to the retry.
 
 ## Status and known gaps
 
@@ -121,4 +122,4 @@ To upgrade a target: review the diff between the old and new tags here, then get
 - A crash in any stage labels the issue or PR `needs-human`, so a failed run does not go silent.
 - PRs target the target repo's default branch, not a hardcoded `main`.
 - The Claude Code CLI is pinned to `CLAUDE_CODE_VERSION`. Bump it deliberately.
-- This repo's own CI runs shellcheck, ruff, gitleaks and zizmor on each PR.
+- This repo's own CI runs shellcheck, ruff, unit tests for `scripts/json_field.py`, gitleaks and zizmor on each PR. The build, intake and review scripts have no automated tests. They were checked by hand, and by the live test runs above.
