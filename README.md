@@ -49,6 +49,7 @@ The target calls this repo's reusable workflow. This repo is private. Check Sett
 - The builder runs with no GitHub token and cannot run git, gh or curl. `builder-settings.json` denies edits to `.github/`, `.claude/`, and `scripts/factory/`.
 - The push token exists only in the push step.
 - The builder's output is checked again for protected paths before commit.
+- The gate is snapshot from the base commit before the builder runs, and that copy decides pass or fail. A branch cannot weaken the gate that judges it.
 - Only the repo owner's label events start a run.
 
 ## Known gaps
