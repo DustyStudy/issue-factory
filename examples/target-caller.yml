@@ -22,11 +22,11 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
-    # Hash-pinned to v2.1.0. zizmor requires a commit SHA here. factory_ref names the same release.
-    uses: DustyStudy/issue-factory/.github/workflows/factory.yml@d2e7b32d0ead89cbffe09956dfa26d8142b29926 # v2.1.0
+    # Hash-pinned to v2.1.3. zizmor requires a commit SHA here. factory_ref names the same release.
+    uses: DustyStudy/issue-factory/.github/workflows/factory.yml@dcce2eeb6ca18cbbb0c00b308a5e834661f60b8c # v2.1.3
     with:
       gate_path: scripts/factory/gate.sh
-      factory_ref: v2.1.0
+      factory_ref: v2.1.3
     secrets:
       anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
       # factory_pat: ${{ secrets.FACTORY_PAT }}   # optional: lets factory PRs trigger CI
