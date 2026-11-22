@@ -124,7 +124,8 @@ To upgrade a target: review the diff between the old and new tags here, then get
 ## Status and known gaps
 
 - Verified live on `DustyStudy/factory-test-target` at v2.1.3: intake, build, gate 1, publish and review all ran, and a PR was opened and reviewed PASS. Intake refused a request to add a workflow under `.github/`. Earlier runs on the same target, on older versions, found three bugs that are now fixed: the gate jobs could not read a private target, the review read an empty PR number, and the review condition skipped the job.
-- Not yet verified live: a gate failure followed by the attempt-2 retry, and the publish-level protected-path refusal (covered only by the local tests in `tests/test_build.sh`). Not yet run on a production codebase.
+- Verified live: a gate failure on attempt 1 ran the attempt-2 retry, which also failed the gate. The run then stopped with no PR, and the issue got one comment with both gate results and `needs-human`.
+- Not verified live: the publish-level protected-path refusal. Intake and the builder's deny rules block those requests before publish, so only the local tests in `tests/test_build.sh` exercise that check. Not yet run on a production codebase.
 - The intake and review verdicts have not been measured against past issues and PRs. There is no eval set yet. Run both on known outcomes before you trust them.
 - One issue, one build, one review. No fix loop after a CHANGES review, which is deliberate to limit spend. A CHANGES review goes to a human.
 - A crash in any stage labels the issue or PR `needs-human`, so a failed run does not go silent.
