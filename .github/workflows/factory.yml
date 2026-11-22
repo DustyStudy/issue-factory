@@ -81,6 +81,18 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: bash factory/scripts/intake.sh
 
+      # A crash here would otherwise leave the issue silent. Hand it to a person.
+      - name: Report when intake crashed
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body "Intake crashed before it could classify this issue. Needs a human."
+          gh issue edit "$ISSUE_NUMBER" --remove-label factory || true
+          gh issue edit "$ISSUE_NUMBER" --add-label needs-human
+
   build:
     needs: intake
     if: needs.intake.outputs.proceed == 'true'
@@ -136,19 +148,21 @@ jobs:
           GH_TOKEN: ${{ secrets.factory_pat || github.token }}
           GH_REPO: ${{ github.repository }}
           BRANCH: ${{ steps.build.outputs.branch }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
         run: bash factory/scripts/open-pr.sh
 
+      # Also runs when the build step crashed (no ready output) or the PR step failed.
       - name: Report when no PR was opened
-        if: steps.build.outputs.ready != 'true'
+        if: ${{ !cancelled() && (steps.build.outputs.ready != 'true' || steps.pr.outcome == 'failure') }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           REASON: ${{ steps.build.outputs.reason }}
         run: |
-          gh issue comment "$ISSUE_NUMBER" --body "Builder stopped without a PR (reason: ${REASON:-unknown}). Needs a human."
+          gh issue comment "$ISSUE_NUMBER" --body "Builder stopped without a PR (reason: ${REASON:-job step failed, see the job log}). Needs a human."
           gh issue edit "$ISSUE_NUMBER" --add-label needs-human
 
   review:
@@ -190,8 +204,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           REVIEW_BUDGET: ${{ inputs.review_budget }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
           PR_NUMBER: ${{ needs.build.outputs.pr }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: bash factory/scripts/review.sh
+
+      - name: Label PR for a human when review crashed
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ needs.build.outputs.pr }}
+        run: gh pr edit "$PR_NUMBER" --add-label needs-human
