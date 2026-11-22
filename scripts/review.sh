@@ -2,14 +2,14 @@
 # Review: one read-only pass over the PR diff. Posts the verdict on the PR and labels it.
 # PASS -> factory-ready (a human still merges). Anything else -> needs-human.
 set -euo pipefail
-: "${FACTORY_DIR:?}" "${ISSUE_NUMBER:?}" "${ISSUE_TITLE:?}" "${PR_NUMBER:?}" "${GH_TOKEN:?}" "${GH_REPO:?}"
+: "${FACTORY_DIR:?}" "${ISSUE_NUMBER:?}" "${ISSUE_TITLE:?}" "${PR_NUMBER:?}" "${GH_TOKEN:?}" "${GH_REPO:?}" "${BASE_BRANCH:?}"
 
-# No fetch here: the checkout already has origin/main, and the checkout does not keep
+# No fetch here: the checkout already has origin/$BASE_BRANCH, and the checkout does not keep
 # credentials, so a fresh fetch fails with "could not read Username".
 work="$(mktemp -d)"
 issue_body="${ISSUE_BODY:-}"
 # Write the diff to a file, then cut it. A pipe into `head` would kill git under pipefail on large diffs.
-git diff origin/main...HEAD > "$work/diff.patch"
+git diff "origin/${BASE_BRANCH}...HEAD" > "$work/diff.patch"
 {
   printf '=== ISSUE ===\n%s\n\n' "$ISSUE_TITLE"
   printf '%s' "${issue_body:0:4000}"
