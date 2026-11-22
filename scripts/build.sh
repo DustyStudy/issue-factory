@@ -51,7 +51,7 @@ for attempt in 1 2; do
     --max-budget-usd "${BUILDER_BUDGET:-2}" \
     --permission-mode dontAsk \
     --settings "$FACTORY_DIR/builder-settings.json" \
-    --allowedTools "Read,Edit,Write,Glob,Grep,Bash(bash ${GATE_PATH}:*),Bash(python3 -m pytest:*),Bash(ruff:*)" \
+    --allowedTools "Read,Edit,Write,Glob,Grep,Bash(ruff:*)" \
     --output-format json < "$work/in.txt" > "$work/builder-$attempt.json" || true
 
   # Surface what the builder did, so a failed run can be diagnosed from the job log.
@@ -60,7 +60,8 @@ for attempt in 1 2; do
     "$work/builder-$attempt.json" 2>/dev/null || cat "$work/builder-$attempt.json" 2>/dev/null | head -c 2000 || true
   echo "::endgroup::"
 
-  if bash "$base_gate" > "$work/gate.log" 2>&1; then
+  # The gate runs tests the builder wrote. Strip the API key so they cannot read it.
+  if env -u ANTHROPIC_API_KEY bash "$base_gate" > "$work/gate.log" 2>&1; then
     ready=true
     break
   fi
