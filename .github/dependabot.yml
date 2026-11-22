@@ -1,0 +1,7 @@
+version: 2
+updates:
+  # Action SHA pins go stale without this. Dependabot bumps the pin and keeps the version comment.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

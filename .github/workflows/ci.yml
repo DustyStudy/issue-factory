@@ -35,6 +35,9 @@ jobs:
           ruff check .
           python3 -m py_compile scripts/json_field.py
 
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+
       - name: Validate JSON settings
         run: python3 -m json.tool builder-settings.json > /dev/null
 
