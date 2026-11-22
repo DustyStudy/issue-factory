@@ -6,6 +6,10 @@ set -euo pipefail
 : "${FACTORY_DIR:?}" "${GATE_PATH:?}" "${ISSUE_NUMBER:?}" "${ISSUE_TITLE:?}" "${GITHUB_OUTPUT:?}"
 cd "$(git rev-parse --show-toplevel)"
 
+# The factory's own checkout sits inside the target workspace as a nested repo. Keep it out of
+# `git add -A`, or it is committed as an embedded repo (gitlink) and breaks the PR.
+printf '/factory/\n' >> "$(git rev-parse --git-path info/exclude)"
+
 # Unique per run, so a retry never collides with a branch a failed run left behind.
 branch="factory/issue-${ISSUE_NUMBER}-${GITHUB_RUN_ID:-local}"
 work="$(mktemp -d)"
