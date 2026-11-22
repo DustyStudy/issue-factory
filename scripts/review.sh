@@ -4,7 +4,8 @@
 set -euo pipefail
 : "${FACTORY_DIR:?}" "${ISSUE_NUMBER:?}" "${ISSUE_TITLE:?}" "${PR_NUMBER:?}" "${GH_TOKEN:?}" "${GH_REPO:?}"
 
-git fetch -q origin main
+# No fetch here: the checkout already has origin/main, and the checkout does not keep
+# credentials, so a fresh fetch fails with "could not read Username".
 work="$(mktemp -d)"
 {
   printf '=== ISSUE ===\n%s\n\n' "$ISSUE_TITLE"
