@@ -41,7 +41,7 @@ for attempt in 1 2; do
 
   # Surface what the builder did, so a failed run can be diagnosed from the job log.
   echo "::group::builder attempt $attempt ($model)"
-  jq -c '{is_error, subtype, num_turns, total_cost_usd, errors, result: ((.result // "") | .[0:800])}' \
+  jq -c '{is_error, subtype, num_turns, total_cost_usd, errors, permission_denials, result: ((.result // "") | .[0:800])}' \
     "$work/builder-$attempt.json" 2>/dev/null || cat "$work/builder-$attempt.json" 2>/dev/null | head -c 2000 || true
   echo "::endgroup::"
 

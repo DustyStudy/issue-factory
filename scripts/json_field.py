@@ -20,7 +20,7 @@ def main() -> int:
     if envelope.get("is_error"):
         return 1
 
-    match = re.search(r"\{.*\}", envelope.get("result") or "", re.S)
+    match = re.search(r"\{.*\}", envelope.get("result") or "", re.DOTALL)
     if not match:
         return 1
     try:
