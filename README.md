@@ -35,9 +35,14 @@ The target calls this repo's reusable workflow. This repo is private. Check Sett
 
 ## Versions
 
-A target pins the factory in two places: the `uses:` line (`factory.yml@vX.Y.Z`) and the `factory_ref` input (`vX.Y.Z`). Keep them equal. Changes to this repo reach a target only when the target changes its pin.
+A target pins the factory in two places: the `uses:` line and the `factory_ref` input. Keep them on the same release.
 
-To upgrade a target: review the diff between the old and new tags here, then change both lines in the target's caller.
+- `uses:` must be a full commit SHA, `factory.yml@<sha> # vX.Y.Z`. The target's zizmor check rejects a tag here.
+- `factory_ref:` is the tag, `vX.Y.Z`, which names the same commit.
+
+Changes to this repo reach a target only when the target changes its pin.
+
+To upgrade a target: review the diff between the old and new tags here, then get the new commit with `git rev-parse vX.Y.Z^{commit}`. Change the SHA and comment on the `uses:` line, and change `factory_ref` to the new tag.
 
 ## Cost controls
 

@@ -22,8 +22,8 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
-    # Pin both lines to the same release tag. Upgrading means changing both.
-    uses: DustyStudy/issue-factory/.github/workflows/factory.yml@v2.0.0
+    # Hash-pinned to v2.0.0. zizmor requires a commit SHA here. factory_ref names the same release.
+    uses: DustyStudy/issue-factory/.github/workflows/factory.yml@40b1eb9b3415a10129efcbf1c8cf7858954579fd # v2.0.0
     with:
       gate_path: scripts/factory/gate.sh
       factory_ref: v2.0.0
