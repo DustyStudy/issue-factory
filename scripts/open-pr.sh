@@ -38,6 +38,11 @@ gh pr create --base "$BASE_BRANCH" --head "$BRANCH" \
 Gate passed. Needs human review and merge."
 
 pr_number="$(gh pr view "$BRANCH" --json number --jq .number)"
+if [ -z "$pr_number" ]; then
+  echo "Opened a PR but could not read its number for $BRANCH" >&2
+  exit 1
+fi
+echo "Opened PR #$pr_number"
 {
   echo "pr=$pr_number"
   echo "branch=$BRANCH"

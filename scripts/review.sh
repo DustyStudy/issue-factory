@@ -2,7 +2,15 @@
 # Review: one read-only pass over the PR diff. Posts the verdict on the PR and labels it.
 # PASS -> factory-ready (a human still merges). Anything else -> needs-human.
 set -euo pipefail
-: "${FACTORY_DIR:?}" "${ISSUE_NUMBER:?}" "${ISSUE_TITLE:?}" "${PR_NUMBER:?}" "${GH_TOKEN:?}" "${GH_REPO:?}" "${BASE_BRANCH:?}"
+: "${FACTORY_DIR:?}" "${ISSUE_NUMBER:?}" "${ISSUE_TITLE:?}" "${BRANCH:?}" "${GH_TOKEN:?}" "${GH_REPO:?}" "${BASE_BRANCH:?}"
+
+# The PR is found from its branch. Fail loudly if it is missing, rather than commenting on nothing.
+pr_number="$(gh pr view "$BRANCH" --json number --jq .number)"
+if [ -z "$pr_number" ]; then
+  echo "No PR found for branch $BRANCH; not reviewing." >&2
+  exit 1
+fi
+echo "Reviewing PR #$pr_number"
 
 # No fetch here: the checkout already has origin/$BASE_BRANCH, and the checkout does not keep
 # credentials, so a fresh fetch fails with "could not read Username".
@@ -42,10 +50,10 @@ fi
     echo "$findings"
   fi
 } > "$work/comment.md"
-gh pr comment "$PR_NUMBER" --body-file "$work/comment.md"
+gh pr comment "$pr_number" --body-file "$work/comment.md"
 
 if [ "$verdict" = "PASS" ]; then
-  gh pr edit "$PR_NUMBER" --add-label factory-ready
+  gh pr edit "$pr_number" --add-label factory-ready
 else
-  gh pr edit "$PR_NUMBER" --add-label needs-human
+  gh pr edit "$pr_number" --add-label needs-human
 fi

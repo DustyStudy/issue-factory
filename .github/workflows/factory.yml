@@ -416,9 +416,11 @@ jobs:
           gh issue comment "$ISSUE_NUMBER" --body "Factory stopped without a PR. Gate result: attempt 1 ${GATE_1:-not run}, attempt 2 ${GATE_2:-not run}. Check the run log for the step that stopped. Needs a human."
           gh issue edit "$ISSUE_NUMBER" --add-label needs-human
 
+  # Finds the PR from the branch name, not from publish's outputs. Those did not reach this job
+  # in the first live run (the review was skipped with an empty pr), so do not depend on them.
   review:
     needs: publish
-    if: needs.publish.outputs.pr != ''
+    if: needs.publish.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -433,7 +435,7 @@ jobs:
       - name: Checkout factory branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ needs.publish.outputs.branch }}
+          ref: factory/issue-${{ github.event.issue.number }}-${{ github.run_id }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -456,7 +458,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           REVIEW_BUDGET: ${{ inputs.review_budget }}
           BASE_BRANCH: ${{ github.event.repository.default_branch }}
-          PR_NUMBER: ${{ needs.publish.outputs.pr }}
+          BRANCH: factory/issue-${{ github.event.issue.number }}-${{ github.run_id }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
@@ -467,5 +469,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ needs.publish.outputs.pr }}
-        run: gh pr edit "$PR_NUMBER" --add-label needs-human
+          BRANCH: factory/issue-${{ github.event.issue.number }}-${{ github.run_id }}
+        run: gh pr edit "$(gh pr view "$BRANCH" --json number --jq .number)" --add-label needs-human
