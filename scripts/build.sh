@@ -6,7 +6,8 @@ set -euo pipefail
 : "${FACTORY_DIR:?}" "${GATE_PATH:?}" "${ISSUE_NUMBER:?}" "${ISSUE_TITLE:?}" "${GITHUB_OUTPUT:?}"
 cd "$(git rev-parse --show-toplevel)"
 
-branch="factory/issue-${ISSUE_NUMBER}"
+# Unique per run, so a retry never collides with a branch a failed run left behind.
+branch="factory/issue-${ISSUE_NUMBER}-${GITHUB_RUN_ID:-local}"
 work="$(mktemp -d)"
 git switch -c "$branch"
 

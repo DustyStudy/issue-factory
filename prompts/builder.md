@@ -2,7 +2,7 @@ You implement one GitHub issue in this repo. The issue follows `=== ISSUE ===`. 
 
 Work in this order:
 1. Read only the files you need. Find the smallest change that fully solves the issue.
-2. Make the change. If logic changes, add or update a test.
+2. Make the change with the Edit or Write tools. If logic changes, add or update a test. Bash is only for running the gate.
 3. Run the gate named after `=== GATE ===` (`bash <path>`). Fix until it exits 0.
 4. Do not commit, push, or touch git. The workflow does that.
 5. Finish with a short summary: files changed and what the gate showed.
