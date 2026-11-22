@@ -67,7 +67,9 @@ if [ "$ready" != true ]; then
   exit 0
 fi
 
-changed="$(git status --porcelain)"
+# Pathspec excludes the nested factory checkout explicitly. The info/exclude rule alone did not
+# keep it out on the runner.
+changed="$(git status --porcelain -- . ':(exclude)factory')"
 if [ -z "$changed" ]; then
   {
     echo "ready=false"
@@ -85,7 +87,15 @@ if printf '%s\n' "$changed" | grep -qE '^.. (\.github/|\.claude/|scripts/factory
   exit 0
 fi
 
-git add -A
+git add -A -- . ':(exclude)factory'
+# Refuse to commit an embedded repository. A gitlink here would break the PR.
+if git ls-files -s -- factory | grep -q '^160000'; then
+  {
+    echo "ready=false"
+    echo "reason=embedded-repo"
+  } >> "$GITHUB_OUTPUT"
+  exit 0
+fi
 git -c user.name=factory-bot -c user.email=factory-bot@users.noreply.github.com \
   commit -q -m "Resolve #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
 
