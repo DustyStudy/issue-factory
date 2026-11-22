@@ -162,7 +162,9 @@ jobs:
     if: needs.build.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    permissions: {}
+    # contents: read lets checkout read the private target. The token is not passed to the gate.
+    permissions:
+      contents: read
     outputs:
       result: ${{ steps.gate.outputs.gate }}
     steps:
@@ -286,7 +288,9 @@ jobs:
     if: needs.build-2.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    permissions: {}
+    # contents: read lets checkout read the private target. The token is not passed to the gate.
+    permissions:
+      contents: read
     outputs:
       result: ${{ steps.gate.outputs.gate }}
     steps:
