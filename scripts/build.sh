@@ -15,6 +15,17 @@ branch="factory/issue-${ISSUE_NUMBER}-${GITHUB_RUN_ID:-local}"
 work="$(mktemp -d)"
 git switch -c "$branch"
 
+# Snapshot the gate from the base commit before the builder runs. The builder can edit the gate in
+# the working tree, so the verdict must come from this copy, not from the branch.
+base_gate="$work/gate.sh"
+if ! git show "HEAD:$GATE_PATH" > "$base_gate" 2>/dev/null; then
+  {
+    echo "ready=false"
+    echo "reason=gate-missing"
+  } >> "$GITHUB_OUTPUT"
+  exit 0
+fi
+
 ready=false
 gate_log=""
 for attempt in 1 2; do
@@ -49,7 +60,7 @@ for attempt in 1 2; do
     "$work/builder-$attempt.json" 2>/dev/null || cat "$work/builder-$attempt.json" 2>/dev/null | head -c 2000 || true
   echo "::endgroup::"
 
-  if bash "$GATE_PATH" > "$work/gate.log" 2>&1; then
+  if bash "$base_gate" > "$work/gate.log" 2>&1; then
     ready=true
     break
   fi
