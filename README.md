@@ -9,17 +9,21 @@ This repo holds the reusable workflow, its scripts and its prompts. A target rep
 When you label an issue `factory` in a target repo, three AI agents work through it in order:
 
 1. **Intake** reads the issue and decides whether it is a clear, low-risk change a code repo can take. It posts its verdict as a comment on the issue.
-2. **Build** implements the change on a new branch, then runs the target's own check script (the gate). The check has to pass.
-3. **Review** reads the diff once, read-only, and posts PASS or CHANGES as a comment on the PR.
+2. **Build** has the builder write the change, then runs the target's own check script (the gate). The gate has to pass. The builder gets two attempts.
+3. **Publish** applies the change to a clean checkout, refuses protected paths, and opens the PR.
+4. **Review** reads the diff once, with no tools, and posts PASS or CHANGES as a comment on the PR.
 
 A person then reads the PR and merges it, or closes it.
 
 ```
 label `factory` added by the repo owner, in a target repo
-  -> intake   Haiku, no tools         PROCEED and risk low?  else -> needs-human, stops here
-  -> build    Sonnet, Opus on retry   gate must pass, 2 tries  else -> needs-human
-  -> PR       branch factory/issue-N, title "Resolve #N", body "Closes #N"
-  -> review   Haiku, read-only        PASS -> factory-ready  else -> needs-human
+  -> intake    Haiku, no tools         PROCEED and risk low?   else -> needs-human, stops here
+  -> build 1   Sonnet, API key         writes a patch          (fresh runner)
+  -> gate 1    no key, no token        target gate passes?     else -> build 2 (Opus, gate log)
+  -> build 2   Opus, API key           writes a patch          (fresh runner, only after gate 1 fails)
+  -> gate 2    no key, no token        target gate passes?     else -> needs-human
+  -> publish   clean checkout, token   protected paths? -> needs-human; else branch factory/issue-N, PR "Closes #N"
+  -> review    Haiku, no tools         PASS -> factory-ready   else -> needs-human
   -> a person merges
 ```
 
@@ -97,7 +101,7 @@ To upgrade a target: review the diff between the old and new tags here, then get
 
 - Models follow Anthropic's "choosing a model" guidance: start on the cheapest model that can do the job, and escalate only when needed. Intake and review run on Haiku 5.5 (effort low and medium). The builder starts on Sonnet 5.5 (effort medium). Only the retry escalates to Opus 5.5, after a gate failure. The retry model is set in `scripts/build.sh`.
 - Each run has a dollar cap: `intake_budget`, `builder_budget` (per attempt), `review_budget`, set as inputs by the caller.
-- The builder gets two attempts and a turn limit. A second failure goes to a human.
+- The builder gets two attempts and a turn limit. A second failure goes to a human. Each attempt and each gate runs on its own runner, which adds runner minutes but no tokens.
 - Issue text is cut to 8,000 characters. The diff is cut to 60,000.
 - One run at a time per target (`concurrency`). Runs queue; they do not cancel each other.
 - Intake and review run with `--bare`, which skips CLAUDE.md, hooks and plugins. Each headless call pays a fixed startup cost. In a local probe with no tools, one Haiku call cost about $0.10 in cache writes.
@@ -105,14 +109,17 @@ To upgrade a target: review the diff between the old and new tags here, then get
 
 ## Safety
 
-- Intake and review have no write tools and get no GitHub token.
-- The builder runs with no GitHub token and cannot run git, gh or curl. `builder-settings.json` denies edits to `.github/`, `.claude/`, and `scripts/factory/`, and denies `env` and `printenv`.
-- The push token exists only in the push step.
-- The builder's output is checked again for protected paths before commit.
-- The gate is snapshot from the base commit before the builder runs, and that copy decides pass or fail. A branch cannot weaken the gate that judges it.
+- Intake and review have no write tools and get no GitHub token. The reviewer has no tools at all: it judges the diff it is given.
+- The builder has no GitHub token and cannot run git, gh or curl. Its only shell tool is `ruff`, which runs no project code. `builder-settings.json` denies edits to `.git/`, `.github/`, `.claude/`, and `scripts/factory/`, and denies reads of `/proc` and `env` and `printenv`.
+- Every step that holds `ANTHROPIC_API_KEY` runs on a runner that never ran the gate. Each builder attempt is its own job. Patches and gate logs move between jobs as artifacts, not as files on disk.
+- The gate runs in a job with no API key and no token. The test code the builder wrote runs there, and nothing from that job is trusted afterward.
+- The publish job runs on a clean checkout of the base commit, with the push token. It applies the patch, refuses any change under `.github/`, `.claude/` or `scripts/factory/` (checked against the base commit, so a commit made in the workspace is caught too), commits with hooks off, and pushes. The push token never runs in a repo the gate touched.
+- The gate's snapshot is taken from the base commit, not the branch, so the builder cannot weaken the gate that judges it.
 - Only the repo owner's label events start a run.
-- The gate runs with `ANTHROPIC_API_KEY` removed from its environment. The gate runs tests the builder wrote, so this keeps the key away from them.
-- The builder has no test runner. Its only shell tool is `ruff`, which runs no project code. The factory runs the gate after the builder finishes and sends the log to the retry.
+- A run that stops for any reason labels the issue `needs-human` and comments once.
+- **Not verified live:** the job layout above was tested locally with a stub `gh` and a bare remote, not on a GitHub runner. The first live run should be watched end to end.
+- **Known limit:** test code runs as the runner user, which can read and write its own job's files. The protection is that no key or token is in that job and that its files never reach a key-holding job or the publish job. It does not stop the test code from making its own job's gate pass.
+- **Unverified:** the `Read(//proc/**)` deny uses Claude Code's absolute-path syntax at the pinned version. The reviewer has no tools, so it does not depend on that rule.
 
 ## Status and known gaps
 
@@ -122,4 +129,4 @@ To upgrade a target: review the diff between the old and new tags here, then get
 - A crash in any stage labels the issue or PR `needs-human`, so a failed run does not go silent.
 - PRs target the target repo's default branch, not a hardcoded `main`.
 - The Claude Code CLI is pinned to `CLAUDE_CODE_VERSION`. Bump it deliberately.
-- This repo's own CI runs shellcheck, ruff, unit tests for `scripts/json_field.py`, gitleaks and zizmor on each PR. The build, intake and review scripts have no automated tests. They were checked by hand, and by the live test runs above.
+- This repo's own CI runs shellcheck, ruff, unit tests for `scripts/json_field.py`, the build chain tests in `tests/test_build.sh`, gitleaks and zizmor on each PR. The intake and review scripts have no automated tests.

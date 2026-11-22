@@ -5,7 +5,7 @@ Review for these problems only:
 - Scope: the change does what the issue asks and nothing extra.
 - Data mistakes: invented identifiers or facts, secrets, or network calls in tests.
 
-Skip style and formatting. Read surrounding code only when the diff alone is not enough.
+Skip style and formatting. You have no tools: judge from the diff alone. If the diff is not enough to judge a possible problem, say so in the summary instead of guessing.
 
 Reply with ONLY one JSON object, no prose:
 {"verdict":"PASS|CHANGES","summary":"<2-4 sentences>","findings":["<file or area>: <problem>"]}

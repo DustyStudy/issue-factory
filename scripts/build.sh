@@ -1,51 +1,36 @@
 #!/usr/bin/env bash
-# Builder: implement one issue on a fresh branch in the target repo, run the target's gate,
-# retry once on failure, and commit if the gate passes. Never pushes.
-# Writes ready, branch and reason to $GITHUB_OUTPUT. Runs from the target repo root.
+# Builder steps. Each attempt runs on its own fresh runner, so the API key never shares a VM with
+# the gate or with anything the gate wrote. Subcommands:
+#   implement N   run the builder, attempt N. Holds ANTHROPIC_API_KEY. The builder has no shell
+#                 except ruff, and no git, gh or curl.
+#   diff N        write everything changed since BASE_SHA as a patch. No key, no token.
+# Runs from the target repo root. The workspace is the base commit plus any earlier patch.
+# Output: $RUNNER_TEMP/patch/patch.diff (diff) and $RUNNER_TEMP/builder-N.json (implement).
 set -euo pipefail
-: "${FACTORY_DIR:?}" "${GATE_PATH:?}" "${ISSUE_NUMBER:?}" "${ISSUE_TITLE:?}" "${GITHUB_OUTPUT:?}"
-cd "$(git rev-parse --show-toplevel)"
 
-# The factory's own checkout sits inside the target workspace as a nested repo. Keep it out of
-# `git add -A`, or it is committed as an embedded repo (gitlink) and breaks the PR.
-printf '/factory/\n' >> "$(git rev-parse --git-path info/exclude)"
+cmd="${1:?usage: build.sh implement N | diff N}"
+n="${2:?attempt number}"
+: "${RUNNER_TEMP:?}"
+cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-# Unique per run, so a retry never collides with a branch a failed run left behind.
-branch="factory/issue-${ISSUE_NUMBER}-${GITHUB_RUN_ID:-local}"
-work="$(mktemp -d)"
-git switch -c "$branch"
+implement() {
+  local model="claude-sonnet-5-5" issue_body="${ISSUE_BODY:-}" input="$RUNNER_TEMP/in-$n.txt"
+  : "${FACTORY_DIR:?}" "${GATE_PATH:?}" "${ISSUE_TITLE:?}"
 
-# Snapshot the gate from the base commit before the builder runs. The builder can edit the gate in
-# the working tree, so the verdict must come from this copy, not from the branch.
-base_gate="$work/gate.sh"
-if ! git show "HEAD:$GATE_PATH" > "$base_gate" 2>/dev/null; then
-  {
-    echo "ready=false"
-    echo "reason=gate-missing"
-  } >> "$GITHUB_OUTPUT"
-  exit 0
-fi
+  # Start on Sonnet 5.5. Escalate to Opus 5.5 only for the retry, after a gate failure.
+  if [ "$n" -gt 1 ]; then
+    model="${BUILDER_RETRY_MODEL:-claude-opus-5-5}"
+  fi
 
-ready=false
-gate_log=""
-issue_body="${ISSUE_BODY:-}"
-for attempt in 1 2; do
   {
     printf '=== ISSUE ===\n%s\n\n' "$ISSUE_TITLE"
     # Slice, not `| head`: a pipe that closes early kills the writer under pipefail.
     printf '%s' "${issue_body:0:8000}"
     printf '\n\n=== GATE ===\n%s\n' "$GATE_PATH"
-    if [ -n "$gate_log" ]; then
-      printf '\n=== GATE LOG ===\n%s\n' "$gate_log"
+    if [ -n "${GATE_LOG:-}" ] && [ -s "$GATE_LOG" ]; then
+      printf '\n=== GATE LOG ===\n%s\n' "$(tail -c 6000 "$GATE_LOG")"
     fi
-  } > "$work/in.txt"
-
-  # Start on Sonnet 5.5. Escalate to Opus 5.5 only for the retry, after a gate failure.
-  # Effort medium: tune it before switching models.
-  model="claude-sonnet-5-5"
-  if [ "$attempt" -gt 1 ]; then
-    model="${BUILDER_RETRY_MODEL:-claude-opus-5-5}"
-  fi
+  } > "$input"
 
   # Fresh context each attempt. The builder gets no GitHub token and cannot run git, gh or curl.
   env -u GH_TOKEN -u GITHUB_TOKEN claude -p "$(cat "$FACTORY_DIR/prompts/builder.md")" \
@@ -54,69 +39,36 @@ for attempt in 1 2; do
     --permission-mode dontAsk \
     --settings "$FACTORY_DIR/builder-settings.json" \
     --allowedTools "Read,Edit,Write,Glob,Grep,Bash(ruff:*)" \
-    --output-format json < "$work/in.txt" > "$work/builder-$attempt.json" || true
+    --output-format json < "$input" > "$RUNNER_TEMP/builder-$n.json" || true
 
   # Surface what the builder did, so a failed run can be diagnosed from the job log.
-  echo "::group::builder attempt $attempt ($model)"
+  echo "::group::builder attempt $n ($model)"
   jq -c '{is_error, subtype, num_turns, total_cost_usd, errors, permission_denials, result: ((.result // "") | .[0:800])}' \
-    "$work/builder-$attempt.json" 2>/dev/null || cat "$work/builder-$attempt.json" 2>/dev/null | head -c 2000 || true
+    "$RUNNER_TEMP/builder-$n.json" 2>/dev/null || head -c 2000 "$RUNNER_TEMP/builder-$n.json" || true
   echo "::endgroup::"
+}
 
-  # The gate runs tests the builder wrote. Strip the API key so they cannot read it.
-  if env -u ANTHROPIC_API_KEY bash "$base_gate" > "$work/gate.log" 2>&1; then
-    ready=true
-    break
+diff_patch() {
+  : "${BASE_SHA:?}"
+  mkdir -p "$RUNNER_TEMP/patch"
+
+  # The factory's own checkout sits inside the target workspace as a nested repo. Keep it out of
+  # `git add -A`, or it is committed as an embedded repo (gitlink) and breaks the PR.
+  printf '/factory/\n' >> "$(git rev-parse --git-path info/exclude)"
+  git add -A
+
+  # Refuse to publish an embedded repository. A gitlink here would break the PR.
+  if grep -q '^160000' <<<"$(git ls-files -s -- factory)"; then
+    echo "embedded repository in the change; refusing to publish" >&2
+    exit 1
   fi
-  echo "::group::gate attempt $attempt output"
-  tail -c 4000 "$work/gate.log" || true
-  echo "::endgroup::"
-  gate_log="$(tail -c 6000 "$work/gate.log")"
-done
 
-if [ "$ready" != true ]; then
-  {
-    echo "ready=false"
-    echo "reason=gate-failed"
-  } >> "$GITHUB_OUTPUT"
-  exit 0
-fi
+  # Against the base commit, so commits made in this workspace are included, not just the tree.
+  git -c core.hooksPath=/dev/null diff --cached --binary --no-ext-diff "$BASE_SHA" > "$RUNNER_TEMP/patch/patch.diff"
+}
 
-# Pathspec excludes the nested factory checkout explicitly. The info/exclude rule alone did not
-# keep it out on the runner.
-changed="$(git status --porcelain -- . ':(exclude)factory')"
-if [ -z "$changed" ]; then
-  {
-    echo "ready=false"
-    echo "reason=no-changes"
-  } >> "$GITHUB_OUTPUT"
-  exit 0
-fi
-
-# The builder settings already deny these paths. Check again before commit. Use a here-string,
-# not a pipe: under pipefail, `printf | grep -q` fails open when grep exits on an early match.
-if grep -qE '^.. (\.github/|\.claude/|scripts/factory/)' <<<"$changed"; then
-  {
-    echo "ready=false"
-    echo "reason=protected-path"
-  } >> "$GITHUB_OUTPUT"
-  exit 0
-fi
-
-# The factory checkout is excluded via .git/info/exclude above. An explicit pathspec exclude makes
-# git add exit 1 on the runner, so use plain add -A and let the exclude do its job.
-git add -A
-# Refuse to commit an embedded repository. A gitlink here would break the PR.
-if git ls-files -s -- factory | grep -q '^160000'; then
-  {
-    echo "ready=false"
-    echo "reason=embedded-repo"
-  } >> "$GITHUB_OUTPUT"
-  exit 0
-fi
-git -c user.name=factory-bot -c user.email=factory-bot@users.noreply.github.com \
-  commit -q -m "Resolve #${ISSUE_NUMBER}: ${ISSUE_TITLE}"
-
-{
-  echo "ready=true"
-  echo "branch=$branch"
-} >> "$GITHUB_OUTPUT"
+case "$cmd" in
+  implement) implement ;;
+  diff) diff_patch ;;
+  *) echo "unknown subcommand: $cmd" >&2; exit 2 ;;
+esac

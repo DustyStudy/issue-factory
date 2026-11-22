@@ -1,9 +1,11 @@
 {
   "permissions": {
     "deny": [
-      "Read(/proc/**)",
+      "Read(//proc/**)",
       "Read(**/.env*)",
       "Read(**/*.env)",
+      "Edit(.git/**)",
+      "Write(.git/**)",
       "Edit(.github/**)",
       "Write(.github/**)",
       "Edit(.claude/**)",

@@ -17,10 +17,11 @@ git diff "origin/${BASE_BRANCH}...HEAD" > "$work/diff.patch"
   head -c 60000 "$work/diff.patch"
 } > "$work/in.txt"
 
-# Read-only tools, no Bash, no GitHub token in the model process.
+# No tools at all, so the model cannot read the runner's files or environment. The reviewer judges
+# the diff it is given, and its summary goes to a public PR comment verbatim.
 env -u GH_TOKEN claude -p "$(cat "$FACTORY_DIR/prompts/reviewer.md")" --bare \
-  --model claude-haiku-5-5 --effort medium --tools "Read,Grep,Glob" --permission-mode dontAsk \
-  --max-turns 6 --max-budget-usd "${REVIEW_BUDGET:-0.5}" \
+  --model claude-haiku-5-5 --effort medium --tools "" \
+  --max-turns 2 --max-budget-usd "${REVIEW_BUDGET:-0.5}" \
   --output-format json < "$work/in.txt" > "$work/out.json" || true
 
 verdict="NEEDS-HUMAN"
