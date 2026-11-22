@@ -27,19 +27,25 @@ git diff "origin/${BASE_BRANCH}...HEAD" > "$work/diff.patch"
 
 # No tools at all, so the model cannot read the runner's files or environment. The reviewer judges
 # the diff it is given, and its summary goes to a public PR comment verbatim.
-env -u GH_TOKEN claude -p "$(cat "$FACTORY_DIR/prompts/reviewer.md")" --bare \
-  --model claude-haiku-5-5 --effort medium --tools "" \
-  --max-turns 2 --max-budget-usd "${REVIEW_BUDGET:-0.5}" \
-  --output-format json < "$work/in.txt" > "$work/out.json" || true
-
+# A failed parse once gave NEEDS-HUMAN on a clean change, so try twice and log why each attempt failed.
 verdict="NEEDS-HUMAN"
 summary="Reviewer could not produce a verdict."
 findings=""
-if out="$(python3 "$FACTORY_DIR/scripts/json_field.py" "$work/out.json")"; then
-  verdict="$(jq -r '.verdict // ""' <<<"$out")"
-  summary="$(jq -r '.summary // ""' <<<"$out")"
-  findings="$(jq -r '.findings[]? | "- " + tostring' <<<"$out")"
-fi
+for attempt in 1 2; do
+  env -u GH_TOKEN claude -p "$(cat "$FACTORY_DIR/prompts/reviewer.md")" --bare \
+    --model claude-haiku-5-5 --effort medium --tools "" \
+    --max-turns 4 --max-budget-usd "${REVIEW_BUDGET:-0.5}" \
+    --output-format json < "$work/in.txt" > "$work/out-$attempt.json" || true
+  echo "::group::review attempt $attempt"
+  jq -c '{is_error, subtype, num_turns, total_cost_usd, errors}' "$work/out-$attempt.json" 2>/dev/null || true
+  echo "::endgroup::"
+  if out="$(python3 "$FACTORY_DIR/scripts/json_field.py" "$work/out-$attempt.json")"; then
+    verdict="$(jq -r '.verdict // ""' <<<"$out")"
+    summary="$(jq -r '.summary // ""' <<<"$out")"
+    findings="$(jq -r '.findings[]? | "- " + tostring' <<<"$out")"
+    break
+  fi
+done
 
 {
   echo "**Factory review: ${verdict}**"
