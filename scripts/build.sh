@@ -39,10 +39,19 @@ for attempt in 1 2; do
     --allowedTools "Read,Edit,Write,Glob,Grep,Bash(bash ${GATE_PATH}),Bash(python3 -m pytest:*),Bash(ruff:*)" \
     --output-format json < "$work/in.txt" > "$work/builder-$attempt.json" || true
 
+  # Surface what the builder did, so a failed run can be diagnosed from the job log.
+  echo "::group::builder attempt $attempt ($model)"
+  jq -c '{is_error, subtype, num_turns, total_cost_usd, errors, result: ((.result // "") | .[0:800])}' \
+    "$work/builder-$attempt.json" 2>/dev/null || cat "$work/builder-$attempt.json" 2>/dev/null | head -c 2000 || true
+  echo "::endgroup::"
+
   if bash "$GATE_PATH" > "$work/gate.log" 2>&1; then
     ready=true
     break
   fi
+  echo "::group::gate attempt $attempt output"
+  tail -c 4000 "$work/gate.log" || true
+  echo "::endgroup::"
   gate_log="$(tail -c 6000 "$work/gate.log")"
 done
 
