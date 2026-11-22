@@ -38,6 +38,9 @@ jobs:
       - name: Unit tests
         run: python3 -m unittest discover -s tests -v
 
+      - name: Build chain tests (diff, gate, publish against a local remote)
+        run: bash tests/test_build.sh
+
       - name: Validate JSON settings
         run: python3 -m json.tool builder-settings.json > /dev/null
 
