@@ -28,10 +28,12 @@ fi
 
 ready=false
 gate_log=""
+issue_body="${ISSUE_BODY:-}"
 for attempt in 1 2; do
   {
     printf '=== ISSUE ===\n%s\n\n' "$ISSUE_TITLE"
-    printf '%s' "${ISSUE_BODY:-}" | head -c 8000
+    # Slice, not `| head`: a pipe that closes early kills the writer under pipefail.
+    printf '%s' "${issue_body:0:8000}"
     printf '\n\n=== GATE ===\n%s\n' "$GATE_PATH"
     if [ -n "$gate_log" ]; then
       printf '\n=== GATE LOG ===\n%s\n' "$gate_log"
@@ -90,8 +92,9 @@ if [ -z "$changed" ]; then
   exit 0
 fi
 
-# The builder settings already deny these paths. Check again before commit.
-if printf '%s\n' "$changed" | grep -qE '^.. (\.github/|\.claude/|scripts/factory/)'; then
+# The builder settings already deny these paths. Check again before commit. Use a here-string,
+# not a pipe: under pipefail, `printf | grep -q` fails open when grep exits on an early match.
+if grep -qE '^.. (\.github/|\.claude/|scripts/factory/)' <<<"$changed"; then
   {
     echo "ready=false"
     echo "reason=protected-path"
