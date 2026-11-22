@@ -11,6 +11,10 @@ on:
         description: Script in the target repo, relative to its root. It must exit 0 before a PR opens.
         type: string
         default: scripts/factory/gate.sh
+      factory_ref:
+        description: Tag or commit SHA of this repo whose scripts and prompts run. The caller owns the version, so set it to the same tag as the uses line.
+        type: string
+        required: true
       intake_budget:
         type: string
         default: "0.25"
@@ -57,9 +61,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: DustyStudy/issue-factory
-          # job.workflow_sha resolved to an older commit than main in a live run, so the
-          # scripts came from a stale checkout. Pin by tag or SHA once this is stable.
-          ref: main
+          ref: ${{ inputs.factory_ref }}
           path: factory
           persist-credentials: false
 
@@ -106,9 +108,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: DustyStudy/issue-factory
-          # job.workflow_sha resolved to an older commit than main in a live run, so the
-          # scripts came from a stale checkout. Pin by tag or SHA once this is stable.
-          ref: main
+          ref: ${{ inputs.factory_ref }}
           path: factory
           persist-credentials: false
 
@@ -176,9 +176,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: DustyStudy/issue-factory
-          # job.workflow_sha resolved to an older commit than main in a live run, so the
-          # scripts came from a stale checkout. Pin by tag or SHA once this is stable.
-          ref: main
+          ref: ${{ inputs.factory_ref }}
           path: factory
           persist-credentials: false
 

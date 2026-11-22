@@ -33,6 +33,12 @@ Add the `factory` label to an issue to start a run. The label is removed at inta
 
 The target calls this repo's reusable workflow. This repo is private. Check Settings > Actions > General > Access, and allow callers from your account. This is not yet verified on a live run.
 
+## Versions
+
+A target pins the factory in two places: the `uses:` line (`factory.yml@vX.Y.Z`) and the `factory_ref` input (`vX.Y.Z`). Keep them equal. Changes to this repo reach a target only when the target changes its pin.
+
+To upgrade a target: review the diff between the old and new tags here, then change both lines in the target's caller.
+
 ## Cost controls
 
 - Models follow Anthropic's "choosing a model" guidance: start on the cheapest model that can do the job, and escalate only when needed. Intake and review run on Haiku 5.5 (effort low and medium). The builder starts on Sonnet 5.5 (effort medium). Only the retry escalates to Opus 5.5, after a gate failure. Override it with `BUILDER_RETRY_MODEL`.
@@ -56,5 +62,4 @@ The target calls this repo's reusable workflow. This repo is private. Check Sett
 
 - One issue, one build, one review. No automatic fix loop after a CHANGES review. This is deliberate, to limit spend.
 - Not tested live. The workflow has not run in GitHub Actions yet.
-- The job pins the factory by `job.workflow_sha`, which is unverified. Pin the caller to a tag or SHA once tested.
 - Claude Code CLI is pinned to `CLAUDE_CODE_VERSION`. Bump it deliberately.
