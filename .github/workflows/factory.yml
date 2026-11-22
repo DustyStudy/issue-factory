@@ -28,6 +28,10 @@ on:
       review_budget:
         type: string
         default: "0.5"
+      auto_merge:
+        description: Squash-merge the PR once the review passes. Off by default, so a person merges. Turn it on only where a person has accepted automatic merges.
+        type: boolean
+        default: false
     secrets:
       anthropic_api_key:
         required: true
@@ -472,3 +476,44 @@ jobs:
           GH_REPO: ${{ github.repository }}
           BRANCH: factory/issue-${{ github.event.issue.number }}-${{ github.run_id }}
         run: gh pr edit "$(gh pr view "$BRANCH" --json number --jq .number)" --add-label needs-human
+
+  # Opt-in (auto_merge: true in the caller). Merges only a PR the review labeled factory-ready.
+  # Off by default: without it, a person merges every PR.
+  automerge:
+    needs: [publish, review]
+    if: ${{ always() && inputs.auto_merge && needs.review.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
+      - name: Squash-merge the factory-ready PR
+        env:
+          GH_TOKEN: ${{ secrets.factory_pat || github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: factory/issue-${{ github.event.issue.number }}-${{ github.run_id }}
+        run: |
+          pr="$(gh pr view "$BRANCH" --json number,labels --jq 'select(.labels | map(.name) | index("factory-ready")) | .number')"
+          if [ -z "$pr" ]; then
+            echo "No factory-ready PR for $BRANCH; not merging." >&2
+            exit 1
+          fi
+          gh pr merge "$pr" --squash --delete-branch
+
+      # Auto-merge failed. Hand the PR to a person, so the failure is not silent.
+      - name: Report when auto-merge failed
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: factory/issue-${{ github.event.issue.number }}-${{ github.run_id }}
+        run: |
+          pr="$(gh pr view "$BRANCH" --json number --jq .number || true)"
+          if [ -n "$pr" ]; then gh pr edit "$pr" --add-label needs-human; fi
