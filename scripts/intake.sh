@@ -10,9 +10,10 @@ gh label create factory-ready --color 0E8A16 --description "Factory review passe
 gh label create factory --color 1D76DB --description "Start the issue factory on this issue" --force
 
 work="$(mktemp -d)"
+issue_body="${ISSUE_BODY:-}"
 {
   printf '=== ISSUE ===\n%s\n\n' "$ISSUE_TITLE"
-  printf '%s' "${ISSUE_BODY:-}" | head -c 8000
+  printf '%s' "${issue_body:0:8000}"
 } > "$work/in.txt"
 
 # GH_TOKEN is stripped so the model process never holds it.

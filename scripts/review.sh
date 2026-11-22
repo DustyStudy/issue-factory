@@ -2,16 +2,19 @@
 # Review: one read-only pass over the PR diff. Posts the verdict on the PR and labels it.
 # PASS -> factory-ready (a human still merges). Anything else -> needs-human.
 set -euo pipefail
-: "${FACTORY_DIR:?}" "${ISSUE_NUMBER:?}" "${ISSUE_TITLE:?}" "${PR_NUMBER:?}" "${GH_TOKEN:?}" "${GH_REPO:?}"
+: "${FACTORY_DIR:?}" "${ISSUE_NUMBER:?}" "${ISSUE_TITLE:?}" "${PR_NUMBER:?}" "${GH_TOKEN:?}" "${GH_REPO:?}" "${BASE_BRANCH:?}"
 
-# No fetch here: the checkout already has origin/main, and the checkout does not keep
+# No fetch here: the checkout already has origin/$BASE_BRANCH, and the checkout does not keep
 # credentials, so a fresh fetch fails with "could not read Username".
 work="$(mktemp -d)"
+issue_body="${ISSUE_BODY:-}"
+# Write the diff to a file, then cut it. A pipe into `head` would kill git under pipefail on large diffs.
+git diff "origin/${BASE_BRANCH}...HEAD" > "$work/diff.patch"
 {
   printf '=== ISSUE ===\n%s\n\n' "$ISSUE_TITLE"
-  printf '%s' "${ISSUE_BODY:-}" | head -c 4000
+  printf '%s' "${issue_body:0:4000}"
   printf '\n=== DIFF ===\n'
-  git diff origin/main...HEAD | head -c 60000
+  head -c 60000 "$work/diff.patch"
 } > "$work/in.txt"
 
 # Read-only tools, no Bash, no GitHub token in the model process.
@@ -26,7 +29,7 @@ findings=""
 if out="$(python3 "$FACTORY_DIR/scripts/json_field.py" "$work/out.json")"; then
   verdict="$(jq -r '.verdict // ""' <<<"$out")"
   summary="$(jq -r '.summary // ""' <<<"$out")"
-  findings="$(jq -r '.findings[]? | "- " + .' <<<"$out")"
+  findings="$(jq -r '.findings[]? | "- " + tostring' <<<"$out")"
 fi
 
 {

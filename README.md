@@ -119,5 +119,7 @@ To upgrade a target: review the diff between the old and new tags here, then get
 - Ran end to end on one test repo, `DustyStudy/factory-test-target`, with several issues. Two builds failed the gate before one passed. Not yet run on a production codebase.
 - The intake and review verdicts have not been measured against past issues and PRs. There is no eval set yet. Run both on known outcomes before you trust them.
 - One issue, one build, one review. No fix loop after a CHANGES review, which is deliberate to limit spend. A CHANGES review goes to a human.
+- A crash in any stage labels the issue or PR `needs-human`, so a failed run does not go silent.
+- PRs target the target repo's default branch, not a hardcoded `main`.
 - The Claude Code CLI is pinned to `CLAUDE_CODE_VERSION`. Bump it deliberately.
 - This repo's own CI runs shellcheck, ruff, unit tests for `scripts/json_field.py`, gitleaks and zizmor on each PR. The build, intake and review scripts have no automated tests. They were checked by hand, and by the live test runs above.
