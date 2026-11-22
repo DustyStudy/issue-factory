@@ -87,7 +87,9 @@ if printf '%s\n' "$changed" | grep -qE '^.. (\.github/|\.claude/|scripts/factory
   exit 0
 fi
 
-git add -A -- . ':(exclude)factory'
+# The factory checkout is excluded via .git/info/exclude above. An explicit pathspec exclude makes
+# git add exit 1 on the runner, so use plain add -A and let the exclude do its job.
+git add -A
 # Refuse to commit an embedded repository. A gitlink here would break the PR.
 if git ls-files -s -- factory | grep -q '^160000'; then
   {
