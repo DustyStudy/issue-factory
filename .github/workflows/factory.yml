@@ -417,10 +417,11 @@ jobs:
           gh issue edit "$ISSUE_NUMBER" --add-label needs-human
 
   # Finds the PR from the branch name, not from publish's outputs. Those did not reach this job
-  # in the first live run (the review was skipped with an empty pr), so do not depend on them.
+  # in the first live run. The bare `needs.publish.result == 'success'` also skipped this job in
+  # live runs, while the same test with always() ran (probe runs, 2026-11-22). Keep the braces.
   review:
     needs: publish
-    if: needs.publish.result == 'success'
+    if: ${{ always() && needs.publish.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
