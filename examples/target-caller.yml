@@ -1,0 +1,31 @@
+# Copy to .github/workflows/factory.yml in a target repo.
+#
+# Setup for the target repo (you run these):
+#   gh label create factory -R OWNER/REPO --color 1D76DB
+#   gh secret set ANTHROPIC_API_KEY -R OWNER/REPO
+# Settings > Actions > General: allow "Allow GitHub Actions to create and approve pull requests".
+#
+# The target must provide a gate script at gate_path. It must exit 0 when the change is good.
+
+name: Issue factory
+
+on:
+  issues:
+    types: [labeled]
+
+permissions: {}
+
+jobs:
+  factory:
+    if: github.event.label.name == 'factory' && github.event.sender.login == github.repository_owner
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    # Pin to a tag or commit SHA once the factory has one.
+    uses: DustyStudy/issue-factory/.github/workflows/factory.yml@main
+    with:
+      gate_path: scripts/factory/gate.sh
+    secrets:
+      anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+      # factory_pat: ${{ secrets.FACTORY_PAT }}   # optional: lets factory PRs trigger CI

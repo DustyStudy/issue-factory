@@ -1,0 +1,193 @@
+name: Issue factory
+
+# Reusable workflow. A target repo calls it from a thin caller (see examples/target-caller.yml).
+# Stages: intake (no tools) -> build (gate, one retry) -> review (read-only) -> human merge.
+# Design and cost notes: README.md
+
+on:
+  workflow_call:
+    inputs:
+      gate_path:
+        description: Script in the target repo, relative to its root. It must exit 0 before a PR opens.
+        type: string
+        default: scripts/factory/gate.sh
+      intake_budget:
+        type: string
+        default: "0.25"
+      builder_budget:
+        description: Dollar cap per builder attempt.
+        type: string
+        default: "2"
+      review_budget:
+        type: string
+        default: "0.5"
+    secrets:
+      anthropic_api_key:
+        required: true
+      factory_pat:
+        description: Optional fine-grained token. Lets factory PRs trigger the target's CI.
+        required: false
+
+permissions: {}
+
+# One run at a time per target repo keeps spend predictable.
+concurrency:
+  group: issue-factory-${{ github.repository }}
+  cancel-in-progress: false
+
+env:
+  CLAUDE_CODE_VERSION: "2.1.317"
+
+jobs:
+  intake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      proceed: ${{ steps.intake.outputs.proceed }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout factory
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: DustyStudy/issue-factory
+          ref: ${{ job.workflow_sha }}
+          path: factory
+          persist-credentials: false
+
+      - name: Install Claude Code
+        run: npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+
+      - name: Classify issue
+        id: intake
+        env:
+          FACTORY_DIR: ${{ github.workspace }}/factory
+          ANTHROPIC_API_KEY: ${{ secrets.anthropic_api_key }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          INTAKE_BUDGET: ${{ inputs.intake_budget }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: bash factory/scripts/intake.sh
+
+  build:
+    needs: intake
+    if: needs.intake.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    outputs:
+      branch: ${{ steps.build.outputs.branch }}
+      pr: ${{ steps.pr.outputs.pr }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout target
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Checkout factory
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: DustyStudy/issue-factory
+          ref: ${{ job.workflow_sha }}
+          path: factory
+          persist-credentials: false
+
+      - name: Install Claude Code
+        run: npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+
+      # No GitHub token in this step: the builder runs here and must not hold one.
+      - name: Implement, gate, commit
+        id: build
+        env:
+          FACTORY_DIR: ${{ github.workspace }}/factory
+          GATE_PATH: ${{ inputs.gate_path }}
+          ANTHROPIC_API_KEY: ${{ secrets.anthropic_api_key }}
+          BUILDER_BUDGET: ${{ inputs.builder_budget }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: bash factory/scripts/build.sh
+
+      # Push token is used only in this step.
+      - name: Push branch and open PR
+        id: pr
+        if: steps.build.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.factory_pat || github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ steps.build.outputs.branch }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: bash factory/scripts/open-pr.sh
+
+      - name: Report when no PR was opened
+        if: steps.build.outputs.ready != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REASON: ${{ steps.build.outputs.reason }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body "Builder stopped without a PR (reason: ${REASON:-unknown}). Needs a human."
+          gh issue edit "$ISSUE_NUMBER" --add-label needs-human
+
+  review:
+    needs: build
+    if: needs.build.outputs.pr != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a # v2.22.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout factory branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.build.outputs.branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout factory
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: DustyStudy/issue-factory
+          ref: ${{ job.workflow_sha }}
+          path: factory
+          persist-credentials: false
+
+      - name: Install Claude Code
+        run: npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+
+      - name: Review diff and label PR
+        env:
+          FACTORY_DIR: ${{ github.workspace }}/factory
+          ANTHROPIC_API_KEY: ${{ secrets.anthropic_api_key }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REVIEW_BUDGET: ${{ inputs.review_budget }}
+          PR_NUMBER: ${{ needs.build.outputs.pr }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: bash factory/scripts/review.sh

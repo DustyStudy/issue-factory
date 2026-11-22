@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(/proc/**)",
+      "Read(**/.env*)",
+      "Read(**/*.env)",
+      "Edit(.github/**)",
+      "Write(.github/**)",
+      "Edit(.claude/**)",
+      "Write(.claude/**)",
+      "Edit(scripts/factory/**)",
+      "Write(scripts/factory/**)",
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(env:*)",
+      "Bash(printenv:*)",
+      "WebFetch",
+      "WebSearch"
+    ]
+  }
+}
