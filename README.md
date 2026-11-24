@@ -6,7 +6,7 @@ This repo holds the reusable workflow, its scripts and its prompts. A target rep
 
 ## What it does
 
-When you label an issue `factory` in a target repo, three AI agents work through it in order:
+Applying the `factory` label starts the workflow. Three agents handle intake, implementation, and review. A separate publish step opens the pull request.
 
 1. **Intake** reads the issue and decides whether it is a clear, low-risk change a code repo can take. It posts its verdict as a comment on the issue.
 2. **Build** has the builder write the change, then runs the target's own check script (the gate). The gate has to pass. The builder gets two attempts.
