@@ -135,8 +135,8 @@ To upgrade a target: review the diff between the old and new tags here, then get
 
 ## Status and known gaps
 
-- Verified live on `DustyStudy/factory-test-target` at v2.2.1, with `auto_merge: true`: a labeled issue went through intake, build, gate, publish, review and automatic merge with no manual step, and the issue closed through its "Closes #N" line. Intake refused a request to add a workflow under `.github/`.
-- Verified live: a gate failure on attempt 1 ran the attempt-2 retry, which also failed the gate. The run then stopped with no PR, and the issue got one comment with both gate results and `needs-human`.
+- In the public [integration fixture](https://github.com/DustyStudy/factory-test-target), v2.2.1 took a labeled issue through intake, build, gate, publish, review and automatic merge. [Fixture PR #34](https://github.com/DustyStudy/factory-test-target/pull/34) closed the issue on merge. [Fixture issue #28](https://github.com/DustyStudy/factory-test-target/issues/28) records an expected intake refusal.
+- [Fixture issue #29](https://github.com/DustyStudy/factory-test-target/issues/29) records an expected gate failure. Both attempts failed, the run stopped before opening a PR, and the workflow reported both results on the issue.
 - Found and fixed by live runs on the test target: the gate jobs could not read a private target (v2.1.1), the review read an empty PR number (v2.1.2), and a bare `needs.publish.result` condition skipped the review (v2.1.3). The v2.2.0 review also failed on a clean change, and v2.2.1 added a retry.
 - Reviewer reliability is not measured. On v2.2.0 one clean change got no verdict; on v2.2.1 the reviews that ran passed. Run more changes before trusting it on a real repo.
 - Not verified live: the publish-level protected-path refusal. Intake and the builder's deny rules block those requests before publish, so only the local tests in `tests/test_build.sh` exercise that check. Not yet run on a production codebase.
